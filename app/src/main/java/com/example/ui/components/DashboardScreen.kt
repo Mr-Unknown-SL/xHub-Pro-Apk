@@ -1,0 +1,727 @@
+package com.example.ui.components
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.example.data.BookmarkEntity
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DashboardScreen(
+    activeUrl: String,
+    activeName: String,
+    bookmarks: List<BookmarkEntity>,
+    showWelcomeDialog: Boolean,
+    themeMode: String,
+    onUrlSelected: (String, String) -> Unit,
+    onDismissWelcome: () -> Unit,
+    onResetPin: () -> Unit,
+    onThemeChange: (String) -> Unit
+) {
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    var insideSettings by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+
+    // Generates a colorful background for site initials avatar placeholders if image fails to load
+    fun getAvatarBrush(char: String): Brush {
+        val hash = char.hashCode()
+        val colors = when (hash % 5) {
+            0 -> listOf(Color(0xFFE91E63), Color(0xFFFF4081))
+            1 -> listOf(Color(0xFF9C27B0), Color(0xFFE040FB))
+            2 -> listOf(Color(0xFF00BCD4), Color(0xFF00E5FF))
+            3 -> listOf(Color(0xFF4CAF50), Color(0xFF69F0AE))
+            else -> listOf(Color(0xFFFF9800), Color(0xFFFFAB40))
+        }
+        return Brush.linearGradient(colors)
+    }
+
+    // Modal Drawer Wrapper
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        gesturesEnabled = !insideSettings, // Disable swipe drawer when looking at parameters
+        drawerContent = {
+            ModalDrawerSheet(
+                modifier = Modifier
+                    .width(320.dp)
+                    .fillMaxHeight(),
+                drawerContainerColor = MaterialTheme.colorScheme.surface,
+                drawerShape = RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp)
+            ) {
+                // Drawer Header
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                    MaterialTheme.colorScheme.surface
+                                )
+                            )
+                        )
+                        .padding(24.dp)
+                ) {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.Lock,
+                                contentDescription = "Private Web Engine",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "xHub Pro",
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 0.5.sp
+                                ),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Founder: Mr.Unknown",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                // Search Bar Section
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .testTag("drawer_search_bar"),
+                    placeholder = {
+                        Text(
+                            text = "Search portals...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Filled.Search,
+                            contentDescription = "Search sites",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Clear,
+                                    contentDescription = "Clear search",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
+                    )
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+                // Scrollable Booking Portals List
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) {
+                    val filteredBookmarks = remember(bookmarks, searchQuery) {
+                        if (searchQuery.isBlank()) {
+                            bookmarks
+                        } else {
+                            bookmarks.filter {
+                                it.name.contains(searchQuery, ignoreCase = true) ||
+                                it.url.contains(searchQuery, ignoreCase = true)
+                            }
+                        }
+                    }
+
+                    if (bookmarks.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Loading synchronized sites...\nPlease verify internet connection.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(24.dp)
+                            )
+                        }
+                    } else if (filteredBookmarks.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                                modifier = Modifier.padding(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Search,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "No matching portals found",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Try searching with other words",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    } else {
+                        LazyColumn(
+                            contentPadding = PaddingValues(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(filteredBookmarks, key = { it.id }) { item ->
+                                val isSelected = item.url == activeUrl
+                                NavigationItemRow(
+                                    item = item,
+                                    isSelected = isSelected,
+                                    avatarBrush = getAvatarBrush(item.logoChar),
+                                    onClick = {
+                                        onUrlSelected(item.name, item.url)
+                                        scope.launch { drawerState.close() }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                // Bottom Drawer Controllers
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Quick close settings link or reset option
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch { drawerState.close() }
+                            insideSettings = true
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(imageVector = Icons.Filled.Settings, contentDescription = "Settings configuration link")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Workspace Settings",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                }
+            }
+        }
+    ) {
+        // Main Portal Content Scaffold
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    navigationIcon = {
+                        if (insideSettings) {
+                            IconButton(
+                                onClick = { insideSettings = false },
+                                modifier = Modifier.testTag("appbar_back_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.ArrowBack,
+                                    contentDescription = "Return to Web Browser Engine",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        } else {
+                            IconButton(
+                                onClick = {
+                                    scope.launch {
+                                        if (drawerState.isClosed) drawerState.open() else drawerState.close()
+                                    }
+                                },
+                                modifier = Modifier.testTag("hamburger_menu_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Menu,
+                                    contentDescription = "Slide Drawer Bookmarks Controller",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    },
+                    title = {
+                        Column {
+                            Text(
+                                text = if (insideSettings) "Settings Page" else "xHub Pro",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = if (insideSettings) "Configure parameters offline" else activeName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    },
+                    actions = {
+                        // Directly clickable single Theme icon switcher instead of a dropdown.
+                        IconButton(
+                            onClick = {
+                                val newMode = if (themeMode == "dark") "light" else "dark"
+                                onThemeChange(newMode)
+                            },
+                            modifier = Modifier.testTag("appbar_theme_button")
+                        ) {
+                            if (themeMode == "dark") {
+                                // When theme is dark, show sun icon to shift to light
+                                Text("☀️", fontSize = 20.sp)
+                            } else {
+                                // When theme is light, show half-moon icon to shift to dark
+                                Text("🌙", fontSize = 20.sp)
+                            }
+                        }
+
+                        // Settings Icon Action
+                        IconButton(
+                            onClick = { insideSettings = !insideSettings },
+                            modifier = Modifier.testTag("appbar_settings_button")
+                        ) {
+                            Icon(
+                                imageVector = if (insideSettings) Icons.Filled.Close else Icons.Filled.Settings,
+                                contentDescription = "Settings Page Log",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface
+                    )
+                )
+            },
+            modifier = Modifier.fillMaxSize()
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
+                if (insideSettings) {
+                    // --- SECURITY SETTINGS SUB PAGE ---
+                    SettingsContentPage(
+                        onResetLock = {
+                            insideSettings = false
+                            onResetPin()
+                        }
+                    )
+                } else {
+                    // Host Private Web Engine
+                    AdvancedWebView(
+                        url = activeUrl,
+                        onTitleChanged = { webTitle ->
+                            // Optional side effect of title updating
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    // FIRST-TIME USER INTRODUCTORY WELCOME POPUP
+    if (showWelcomeDialog) {
+        AlertDialog(
+            onDismissRequest = { onDismissWelcome() },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.Lock,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Welcome to xHub Pro",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    // Styled Founder / Creator Banner
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(
+                                        MaterialTheme.colorScheme.primaryContainer,
+                                        MaterialTheme.colorScheme.secondaryContainer
+                                    )
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .padding(16.dp)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                            Icon(
+                                imageVector = Icons.Filled.Person,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "App Owner: Mr.Unknown",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "xHub Pro is a highly secure, privacy-focused private browser environment designed to insulate your browsing sessions.",
+                        style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+
+                    Text(
+                        text = "💡 Quick Guide:\n• Slide left-to-right or tap topbar menu icon to reveal private bookmarked portals.\n• Your secure lock passcode, traces or patterns protect data integrity.",
+                        style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { onDismissWelcome() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .testTag("dismiss_welcome_button"),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text(
+                        text = "Get Started",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                    )
+                }
+            },
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.testTag("welcome_popup_dialog")
+        )
+    }
+}
+
+// Stunning Material 3 style Off-grid Settings View
+@Composable
+fun SettingsContentPage(
+    onResetLock: () -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Text(
+                text = "Security Preferences",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+        }
+
+        // Change Lock Option Block
+        item {
+            Surface(
+                onClick = onResetLock,
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+                modifier = Modifier.fillMaxWidth().testTag("settings_change_lock_style")
+            ) {
+                Row(
+                    modifier = Modifier.padding(20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Lock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Change Lock Style",
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Switch between pattern, numeric pins or system biometrics",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Filled.ArrowForward,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                }
+            }
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "About Application",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+        }
+
+        // About Block containing MR. UNKNOWN signature and detailed specs
+        item {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(22.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(Color.Red.copy(alpha = 0.1f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Person,
+                                contentDescription = null,
+                                tint = Color.Red,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "App Owner: Mr.Unknown",
+                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Developer & Founder of custom portals system",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                    Text(
+                        text = "xHub Pro delivers unparalleled high security and session encapsulation. All cache files, browsing footprints and web configurations remain isolated inside the local storage engine.",
+                        style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = "🔒 Security Highlights:\n• Dynamic Multi Lock: Choose from Pattern tracing grids, 4/6 codes or secure fingerprint scanners.\n• Encrypted Preferences: Stored safely offline.\n• Cloud Synced Bookmarks: Automated repo updating keeping your portals connected.",
+                        style = MaterialTheme.typography.bodySmall.copy(lineHeight = 20.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun NavigationItemRow(
+    item: BookmarkEntity,
+    isSelected: Boolean,
+    avatarBrush: Brush,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .testTag("bookmark_item_${item.id}"),
+        color = if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+        } else {
+            Color.Transparent
+        },
+        shape = RoundedCornerShape(10.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // High Resolution Favicon Loader with Auto Initial Letter Gradient Fallback
+            var isImageError by remember { mutableStateOf(false) }
+
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .background(
+                        textColorBrush(isImageError, avatarBrush, MaterialTheme.colorScheme.surfaceVariant),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (!isImageError) {
+                    val rootDomain = extractDomain(item.url)
+                    AsyncImage(
+                        model = "https://www.google.com/s2/favicons?sz=64&domain=$rootDomain",
+                        contentDescription = "favicon for ${item.name}",
+                        modifier = Modifier
+                            .size(22.dp)
+                            .clip(CircleShape),
+                        onError = { isImageError = true },
+                        onSuccess = { isImageError = false }
+                    )
+                }
+
+                if (isImageError) {
+                    Text(
+                        text = item.logoChar,
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.ExtraBold)
+                    )
+                }
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = item.name,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    }
+                )
+                Text(
+                    text = item.url,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+// Utility to cleanly extract root domain hostnames for precise favicon loading
+private fun extractDomain(url: String): String {
+    return try {
+        val uri = java.net.URI(url)
+        val domain = uri.host ?: ""
+        if (domain.startsWith("www.")) domain.substring(4) else domain
+    } catch (e: Exception) {
+        url.replace("https://", "").replace("http://", "").split("/").firstOrNull() ?: ""
+    }
+}
+
+// Return dynamic background colors for favicon placeholders
+@Composable
+private fun textColorBrush(isError: Boolean, errorBrush: Brush, normalColor: Color): Brush {
+    return if (isError) {
+        errorBrush
+    } else {
+        Brush.linearGradient(listOf(normalColor, normalColor))
+    }
+}

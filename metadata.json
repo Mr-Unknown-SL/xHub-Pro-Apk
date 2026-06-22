@@ -1,0 +1,6 @@
+{
+  "name": "xHub Pro",
+  "description": "Premium security-first web navigation hub and view manager",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
