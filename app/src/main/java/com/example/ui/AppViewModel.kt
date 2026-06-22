@@ -67,10 +67,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
     // Active Website Parameters
-    private val _activeUrl = MutableStateFlow("https://www.pornhub.com")
+    private val _activeUrl = MutableStateFlow("")
     val activeUrl: StateFlow<String> = _activeUrl.asStateFlow()
 
-    private val _activeName = MutableStateFlow("Pornhub")
+    private val _activeName = MutableStateFlow("")
     val activeName: StateFlow<String> = _activeName.asStateFlow()
 
     // Welcome dialogue tracker
@@ -92,23 +92,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             
             // Set initial state based on configured settings
             if (!prefsManager.isSetupCompleted()) {
-                _authState.value = PinAuthState.SetupWelcome
+                if (prefsManager.isWelcomeDismissed()) {
+                    _authState.value = PinAuthState.SetupChooseStyle
+                } else {
+                    _authState.value = PinAuthState.SetupWelcome
+                }
             } else {
                 _authState.value = PinAuthState.RequestPin
-                // If biometrics configured, we automatically trigger standard biometric request (handled inside UI)
             }
 
             // Sync websites list from custom GitHub repo
             syncRemoteSites()
-
-            // Update default active parameters based on database synchronization
-            repository.allBookmarks.collect { list ->
-                if (list.isNotEmpty() && _activeUrl.value == "https://www.pornhub.com" && _activeName.value == "Pornhub") {
-                    val first = list.first()
-                    _activeUrl.value = first.url
-                    _activeName.value = first.name
-                }
-            }
         }
     }
 
@@ -170,15 +164,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _activeLockStyle.value = style
         _errorMessage.value = null
         clearInput()
-        
-        if (style == "biometrics") {
-            // Save setup direct as biometric setup doesn't require pattern loops
-            prefsManager.setSetupCompleted(true)
-            _authState.value = PinAuthState.Unlocked
-            checkWelcomeDialogStatus()
-        } else {
-            _authState.value = PinAuthState.SetupLock
-        }
+        _authState.value = PinAuthState.SetupLock
     }
 
     fun reverseToChooseStyle() {

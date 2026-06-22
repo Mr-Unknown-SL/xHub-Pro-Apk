@@ -1,12 +1,14 @@
 package com.example.ui.components
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,6 +23,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
@@ -163,10 +166,11 @@ fun PinLockScreen(
                     }
 
                     Button(
-                        onClick = onProceedWelcome,
+                        onClick = {},
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(54.dp)
+                            .bounceClick(onClick = onProceedWelcome)
                             .testTag("welcome_next_button"),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
@@ -243,13 +247,6 @@ fun PinLockScreen(
                                 desc = "Extra secure complex digit layout lock",
                                 icon = Icons.Filled.Lock,
                                 onClick = { onSelectStyle("6_pin") }
-                            )
-
-                            LockStyleSelectCard(
-                                title = "Fingerprint Lock",
-                                desc = "Instant convenient local fingerprint verification",
-                                icon = Icons.Filled.Lock,
-                                onClick = { onSelectStyle("biometrics") }
                             )
                         }
                     }
@@ -473,7 +470,7 @@ fun KeypadButton(
                     MaterialTheme.colorScheme.surfaceVariant
                 }
             )
-            .clickable(onClick = onClick)
+            .bounceClick(onClick = onClick)
             .testTag("keypad_btn_$symbol"),
         contentAlignment = Alignment.Center
     ) {
@@ -500,11 +497,12 @@ fun LockStyleSelectCard(
     onClick: () -> Unit
 ) {
     Surface(
-        onClick = onClick,
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .bounceClick(onClick = onClick)
     ) {
         Row(
             modifier = Modifier.padding(20.dp),
@@ -554,6 +552,7 @@ fun PatternLockDrawGrid(
     onClear: () -> Unit
 ) {
     val nodePositions = remember { mutableStateMapOf<Int, Offset>() }
+    var dragPosition by remember { mutableStateOf<Offset?>(null) }
     val primaryColor = MaterialTheme.colorScheme.primary
     val outlineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
     
@@ -570,21 +569,35 @@ fun PatternLockDrawGrid(
                 .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
                 .pointerInput(Unit) {
                     detectDragGestures(
-                        onDragStart = { /* Reset starts drawing */ },
+                        onDragStart = { offset ->
+                            onClear()
+                            dragPosition = offset
+                            nodePositions.forEach { (index, nodeOffset) ->
+                                val distance = (nodeOffset - offset).getDistance()
+                                if (distance < 50f) {
+                                    onNodeAdded(index)
+                                }
+                            }
+                        },
                         onDrag = { change, dragAmount ->
                             val currentPos = change.position
-                            // Check which of the 9 nodes is under this touch offset position
+                            dragPosition = currentPos
                             nodePositions.forEach { (index, offset) ->
                                 val distance = (offset - currentPos).getDistance()
-                                if (distance < 50f) { // Touch target hit radius inside coordinate framework
+                                if (distance < 50f) {
                                     onNodeAdded(index)
                                 }
                             }
                         },
                         onDragEnd = {
+                            dragPosition = null
                             if (patternBuffer.isNotEmpty()) {
                                 onSubmit()
                             }
+                        },
+                        onDragCancel = {
+                            dragPosition = null
+                            onClear()
                         }
                     )
                 }
@@ -606,6 +619,22 @@ fun PatternLockDrawGrid(
                                 cap = StrokeCap.Round
                             )
                         }
+                    }
+                }
+
+                // Draw live floating drag line from last dot to user finger
+                val lastDot = patternBuffer.lastOrNull()
+                val liveFingerPos = dragPosition
+                if (lastDot != null && liveFingerPos != null) {
+                    val startPos = nodePositions[lastDot]
+                    if (startPos != null) {
+                        drawLine(
+                            color = primaryColor.copy(alpha = 0.8f),
+                            start = startPos,
+                            end = liveFingerPos,
+                            strokeWidth = 8f,
+                            cap = StrokeCap.Round
+                        )
                     }
                 }
             }
@@ -637,10 +666,6 @@ fun PatternLockDrawGrid(
                                             parentPos.x + size.width / 2f,
                                             parentPos.y + size.height / 2f
                                         )
-                                    }
-                                    .clickable {
-                                        // Tap connection alternative (extremely stable fallback option)
-                                        onNodeAdded(idx)
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
@@ -670,16 +695,22 @@ fun PatternLockDrawGrid(
             modifier = Modifier.fillMaxWidth(0.8f)
         ) {
             OutlinedButton(
-                onClick = onClear,
-                modifier = Modifier.weight(1f),
+                onClick = {},
+                modifier = Modifier
+                    .weight(1f)
+                    .bounceClick(onClick = onClear),
                 shape = RoundedCornerShape(10.dp)
             ) {
                 Text("RESET")
             }
             
             Button(
-                onClick = onSubmit,
-                modifier = Modifier.weight(1f),
+                onClick = {},
+                modifier = Modifier
+                    .weight(1f)
+                    .bounceClick(
+                        onClick = { if (patternBuffer.isNotEmpty()) onSubmit() }
+                    ),
                 shape = RoundedCornerShape(10.dp),
                 enabled = patternBuffer.isNotEmpty()
             ) {
@@ -830,4 +861,30 @@ fun BiometricMockScanner(
 @Composable
 private fun outlineLightBorder(): Color {
     return MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+}
+
+// PREMIUM NEXT-LEVEL CLICK ANIMATION MODIFIER
+@Composable
+private fun Modifier.bounceClick(onClick: () -> Unit = {}): Modifier {
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.93f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+        ),
+        label = "bounce"
+    )
+
+    return this
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .clickable(
+            interactionSource = interactionSource,
+            indication = androidx.compose.foundation.LocalIndication.current,
+            onClick = onClick
+        )
 }

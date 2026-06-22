@@ -1,9 +1,13 @@
 package com.example.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -376,12 +381,18 @@ fun DashboardScreen(
                     )
                 } else {
                     // Host Private Web Engine
-                    AdvancedWebView(
-                        url = activeUrl,
-                        onTitleChanged = { webTitle ->
-                            // Optional side effect of title updating
-                        }
-                    )
+                    if (activeUrl.isEmpty()) {
+                        EmptySiteSelectPlaceholder(onOpenMenu = {
+                            scope.launch { drawerState.open() }
+                        })
+                    } else {
+                        AdvancedWebView(
+                            url = activeUrl,
+                            onTitleChanged = { webTitle ->
+                                // Optional side effect of title updating
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -633,7 +644,7 @@ fun NavigationItemRow(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .bounceClick(onClick = onClick)
             .testTag("bookmark_item_${item.id}"),
         color = if (isSelected) {
             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
@@ -723,5 +734,128 @@ private fun textColorBrush(isError: Boolean, errorBrush: Brush, normalColor: Col
         errorBrush
     } else {
         Brush.linearGradient(listOf(normalColor, normalColor))
+    }
+}
+
+// PREMIUM NEXT-LEVEL CLICK ANIMATION MODIFIER
+@Composable
+private fun Modifier.bounceClick(onClick: () -> Unit = {}): Modifier {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.93f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "bounce"
+    )
+
+    return this
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .clickable(
+            interactionSource = interactionSource,
+            indication = LocalIndication.current,
+            onClick = onClick
+        )
+}
+
+@Composable
+fun EmptySiteSelectPlaceholder(onOpenMenu: () -> Unit) {
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(32.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    }
+                    .size(90.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Menu,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(40.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                text = "Select site to open",
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.5.sp
+                ),
+                color = MaterialTheme.colorScheme.onBackground
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Tap the menu icon in the top left corner to browse and select your favorite secure site",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 24.dp)
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Beautiful customized call-to-action button with bounce animation
+            Button(
+                onClick = onOpenMenu,
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                ),
+                modifier = Modifier
+                    .height(48.dp)
+                    .bounceClick(onClick = onOpenMenu)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.List,
+                        contentDescription = null
+                    )
+                    Text(
+                        text = "Open Portal Menu",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                    )
+                }
+            }
+        }
     }
 }

@@ -13,13 +13,17 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -149,77 +153,105 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun LoadingSyncScreen() {
     val primaryColor = MaterialTheme.colorScheme.primary
-    
-    // Infinite transition for custom horizontal back & forth animation of our small line!
-    val infiniteTransition = rememberInfiniteTransition(label = "syncProgress")
-    val xOffsetFraction by infiniteTransition.animateFloat(
+    val pulseTransition = rememberInfiniteTransition(label = "pulseLogo")
+    val pulseScale by pulseTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1100, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
+
+    val progressTransition = rememberInfiniteTransition(label = "lineProgress")
+    val lineOffset by progressTransition.animateFloat(
         initialValue = -0.3f,
         targetValue = 1.3f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1400, easing = LinearEasing),
+            animation = tween(1300, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
-        label = "xOffset"
+        label = "lineOffset"
     )
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(24.dp),
+            .statusBarsPadding()
+            .navigationBarsPadding(),
         contentAlignment = Alignment.Center
     ) {
+        // App logo & Connecting title centered perfectly
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 32.dp)
         ) {
-            // High quality dynamic glowing spinner loops using local fingerprint style visuals
+            // High fidelity beautifully glowing centered app logo
             Box(
                 modifier = Modifier
-                    .size(100.dp)
-                    .background(primaryColor.copy(alpha = 0.05f), CircleShape)
-                    .padding(16.dp),
+                    .graphicsLayer {
+                        scaleX = pulseScale
+                        scaleY = pulseScale
+                    }
+                    .size(110.dp)
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primaryContainer,
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            )
+                        ),
+                        shape = RoundedCornerShape(28.dp)
+                    )
+                    .border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(28.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.fillMaxSize(),
-                    color = primaryColor,
-                    strokeWidth = 3.dp
+                Text(
+                    "X",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.displayMedium.copy(
+                        fontWeight = FontWeight.Black,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Serif
+                    )
                 )
             }
 
             Spacer(modifier = Modifier.height(28.dp))
 
             Text(
+                text = "xHub Pro",
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.5.sp
+                ),
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
                 text = "Connecting...",
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
+                    letterSpacing = 0.5.sp
                 ),
-                color = MaterialTheme.colorScheme.onBackground,
-                textAlign = TextAlign.Center
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.9f)
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "Securing link to global portals database. Please wait...",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 32.dp)
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Premium custom horizontal line that glides smoothly back & forth
             Box(
                 modifier = Modifier
-                    .width(180.dp)
+                    .width(160.dp)
                     .height(4.dp)
                     .background(
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f),
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f),
                         shape = CircleShape
                     )
             ) {
@@ -227,7 +259,7 @@ fun LoadingSyncScreen() {
                     val w = size.width
                     val h = size.height
                     val lineLength = w * 0.35f
-                    val startX = w * xOffsetFraction
+                    val startX = w * lineOffset
                     
                     drawRoundRect(
                         color = primaryColor,
@@ -237,6 +269,23 @@ fun LoadingSyncScreen() {
                     )
                 }
             }
+        }
+
+        // "By Mr.Unknown" placed beautifully at the bottom of the screen
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 36.dp)
+        ) {
+            Text(
+                text = "By Mr.Unknown",
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.5.sp
+                ),
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
