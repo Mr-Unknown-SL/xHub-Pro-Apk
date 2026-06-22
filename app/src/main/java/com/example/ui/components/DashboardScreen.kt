@@ -763,6 +763,24 @@ private fun Modifier.bounceClick(onClick: () -> Unit = {}): Modifier {
         )
 }
 
+// PREMIUM ANIMATED SCALE MODIFIER BASED ON INTERACTION SOURCE
+@Composable
+private fun Modifier.pressScale(interactionSource: androidx.compose.foundation.interaction.InteractionSource): Modifier {
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.93f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "pressScale"
+    )
+    return this.graphicsLayer {
+        scaleX = scale
+        scaleY = scale
+    }
+}
+
 @Composable
 fun EmptySiteSelectPlaceholder(onOpenMenu: () -> Unit) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
@@ -832,15 +850,17 @@ fun EmptySiteSelectPlaceholder(onOpenMenu: () -> Unit) {
             Spacer(modifier = Modifier.height(24.dp))
 
             // Beautiful customized call-to-action button with bounce animation
+            val placeholderBtnInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
             Button(
                 onClick = onOpenMenu,
+                interactionSource = placeholderBtnInteractionSource,
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
                 ),
                 modifier = Modifier
                     .height(48.dp)
-                    .bounceClick(onClick = onOpenMenu)
+                    .pressScale(placeholderBtnInteractionSource)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

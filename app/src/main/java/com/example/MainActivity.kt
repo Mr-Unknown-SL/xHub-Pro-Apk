@@ -21,6 +21,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
@@ -166,8 +167,8 @@ fun LoadingSyncScreen() {
 
     val progressTransition = rememberInfiniteTransition(label = "lineProgress")
     val lineOffset by progressTransition.animateFloat(
-        initialValue = -0.3f,
-        targetValue = 1.3f,
+        initialValue = -0.35f,
+        targetValue = 1.0f,
         animationSpec = infiniteRepeatable(
             animation = tween(1300, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
@@ -254,6 +255,7 @@ fun LoadingSyncScreen() {
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f),
                         shape = CircleShape
                     )
+                    .clip(CircleShape)
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val w = size.width

@@ -165,12 +165,14 @@ fun PinLockScreen(
                         }
                     }
 
+                    val welcomeBtnInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                     Button(
-                        onClick = {},
+                        onClick = onProceedWelcome,
+                        interactionSource = welcomeBtnInteractionSource,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(54.dp)
-                            .bounceClick(onClick = onProceedWelcome)
+                            .pressScale(welcomeBtnInteractionSource)
                             .testTag("welcome_next_button"),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
@@ -694,23 +696,25 @@ fun PatternLockDrawGrid(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxWidth(0.8f)
         ) {
+            val resetInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
             OutlinedButton(
-                onClick = {},
+                onClick = onClear,
+                interactionSource = resetInteractionSource,
                 modifier = Modifier
                     .weight(1f)
-                    .bounceClick(onClick = onClear),
+                    .pressScale(resetInteractionSource),
                 shape = RoundedCornerShape(10.dp)
             ) {
                 Text("RESET")
             }
             
+            val continueInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
             Button(
-                onClick = {},
+                onClick = { if (patternBuffer.isNotEmpty()) onSubmit() },
+                interactionSource = continueInteractionSource,
                 modifier = Modifier
                     .weight(1f)
-                    .bounceClick(
-                        onClick = { if (patternBuffer.isNotEmpty()) onSubmit() }
-                    ),
+                    .pressScale(continueInteractionSource),
                 shape = RoundedCornerShape(10.dp),
                 enabled = patternBuffer.isNotEmpty()
             ) {
@@ -887,4 +891,22 @@ private fun Modifier.bounceClick(onClick: () -> Unit = {}): Modifier {
             indication = androidx.compose.foundation.LocalIndication.current,
             onClick = onClick
         )
+}
+
+// PREMIUM ANIMATED SCALE MODIFIER BASED ON INTERACTION SOURCE
+@Composable
+private fun Modifier.pressScale(interactionSource: androidx.compose.foundation.interaction.InteractionSource): Modifier {
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.93f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+        ),
+        label = "pressScale"
+    )
+    return this.graphicsLayer {
+        scaleX = scale
+        scaleY = scale
+    }
 }
