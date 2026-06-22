@@ -10,13 +10,20 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -140,7 +147,103 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
+fun LoadingSyncScreen() {
+    val primaryColor = MaterialTheme.colorScheme.primary
+    
+    // Infinite transition for custom horizontal back & forth animation of our small line!
+    val infiniteTransition = rememberInfiniteTransition(label = "syncProgress")
+    val xOffsetFraction by infiniteTransition.animateFloat(
+        initialValue = -0.3f,
+        targetValue = 1.3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1400, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "xOffset"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            // High quality dynamic glowing spinner loops using local fingerprint style visuals
+            Box(
+                modifier = Modifier
+                    .size(100.dp)
+                    .background(primaryColor.copy(alpha = 0.05f), CircleShape)
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.fillMaxSize(),
+                    color = primaryColor,
+                    strokeWidth = 3.dp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            Text(
+                text = "Connecting...",
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                ),
+                color = MaterialTheme.colorScheme.onBackground,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Securing link to global portals database. Please wait...",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 32.dp)
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Premium custom horizontal line that glides smoothly back & forth
+            Box(
+                modifier = Modifier
+                    .width(180.dp)
+                    .height(4.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f),
+                        shape = CircleShape
+                    )
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val w = size.width
+                    val h = size.height
+                    val lineLength = w * 0.35f
+                    val startX = w * xOffsetFraction
+                    
+                    drawRoundRect(
+                        color = primaryColor,
+                        topLeft = Offset(startX, 0f),
+                        size = androidx.compose.ui.geometry.Size(lineLength, h),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2f, h / 2f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun AppNavigation(viewModel: AppViewModel) {
+    val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
     val authState by viewModel.authState.collectAsStateWithLifecycle()
     val pinBuffer by viewModel.pinBuffer.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
@@ -152,7 +255,9 @@ fun AppNavigation(viewModel: AppViewModel) {
     val activeLockStyle by viewModel.activeLockStyle.collectAsStateWithLifecycle()
     val patternBuffer by viewModel.patternBuffer.collectAsStateWithLifecycle()
 
-    if (authState != PinAuthState.Unlocked) {
+    if (isSyncing) {
+        LoadingSyncScreen()
+    } else if (authState != PinAuthState.Unlocked) {
         PinLockScreen(
             authState = authState,
             pinBuffer = pinBuffer,

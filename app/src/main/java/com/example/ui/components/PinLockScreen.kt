@@ -246,9 +246,9 @@ fun PinLockScreen(
                             )
 
                             LockStyleSelectCard(
-                                title = "Face / Fingerprint Lock",
-                                desc = "Instant convenient dynamic system biometrics",
-                                icon = Icons.Filled.Person,
+                                title = "Fingerprint Lock",
+                                desc = "Instant convenient local fingerprint verification",
+                                icon = Icons.Filled.Lock,
                                 onClick = { onSelectStyle("biometrics") }
                             )
                         }
@@ -325,7 +325,7 @@ fun PinLockScreen(
                         }
                     } else {
                         when {
-                            isBiometrics -> "Biometric Portal Lock" to "Authenticating your workspace session..."
+                            isBiometrics -> "Fingerprint Portal Lock" to "Authenticating your workspace session..."
                             isPattern -> "Pattern Workspace Locked" to "Draw your secure secret pattern to enter"
                             lockStyle == "6_pin" -> "Enter 6-Digit PIN" to "Verify private passcode layout"
                             else -> "Enter 4-Digit PIN" to "Verify private passcode layout"
@@ -689,6 +689,61 @@ fun PatternLockDrawGrid(
     }
 }
 
+// Beautiful, high-fidelity dynamic Fingerprint Icon drawn purely via Canvas
+@Composable
+fun FingerprintIcon(
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val center = Offset(w / 2f, h / 2f)
+
+        // Draw multiple beautiful concentric fingerprint arcs
+        for (i in 1..5) {
+            val radius = (i * 10).dp.toPx()
+            if (radius < w / 2f) {
+                drawArc(
+                    color = color,
+                    startAngle = 180f,
+                    sweepAngle = 180f,
+                    useCenter = false,
+                    topLeft = Offset(center.x - radius, center.y - radius),
+                    size = androidx.compose.ui.geometry.Size(radius * 2f, radius * 2f),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = 4.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                )
+            }
+        }
+        // Draw lower loops / lines
+        val loopWidth = 4.dp.toPx()
+        drawLine(
+            color = color,
+            start = Offset(center.x - 10.dp.toPx(), center.y),
+            end = Offset(center.x - 10.dp.toPx(), center.y + 20.dp.toPx()),
+            strokeWidth = loopWidth,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = color,
+            start = Offset(center.x + 10.dp.toPx(), center.y),
+            end = Offset(center.x + 10.dp.toPx(), center.y + 20.dp.toPx()),
+            strokeWidth = loopWidth,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = color,
+            start = Offset(center.x, center.y + 5.dp.toPx()),
+            end = Offset(center.x, center.y + 25.dp.toPx()),
+            strokeWidth = loopWidth,
+            cap = StrokeCap.Round
+        )
+    }
+}
+
 // Gorgeous secure scanning circle that lets simulated bio pass beautifully
 @Composable
 fun BiometricMockScanner(
@@ -742,10 +797,8 @@ fun BiometricMockScanner(
                 )
             }
             
-            Icon(
-                imageVector = Icons.Filled.Person,
-                contentDescription = "Scan Finger",
-                tint = if (isScanning) primaryColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            FingerprintIcon(
+                color = if (isScanning) primaryColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 modifier = Modifier.size(72.dp)
             )
         }

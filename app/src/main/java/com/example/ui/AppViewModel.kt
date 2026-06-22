@@ -82,7 +82,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val themeMode: StateFlow<String> = _themeMode.asStateFlow()
 
     // Synchronisation state
-    private val _isSyncing = MutableStateFlow(false)
+    private val _isSyncing = MutableStateFlow(true)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
     init {
@@ -344,12 +344,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // Total security cleanup (Restarts lock configuration flow)
     fun resetPin() {
         prefsManager.clearPin()
-        _themeMode.value = "system"
-        prefsManager.setAppTheme("system")
-        
+        // Maintain theme and welcome dialog visibility logic separately
         clearInput()
         _activeLockStyle.value = "4_pin"
-        _authState.value = PinAuthState.SetupWelcome
+        _authState.value = PinAuthState.SetupChooseStyle
         _showWelcomeDialog.value = false
     }
 }
