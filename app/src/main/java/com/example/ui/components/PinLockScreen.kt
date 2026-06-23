@@ -530,6 +530,11 @@ fun PatternLockDrawGrid(
     val density = LocalDensity.current
     val collisionRadius = remember(density) { with(density) { 36.dp.toPx() } }
     
+    val currentPatternBuffer by rememberUpdatedState(patternBuffer)
+    val currentOnNodeAdded by rememberUpdatedState(onNodeAdded)
+    val currentOnSubmit by rememberUpdatedState(onSubmit)
+    val currentOnClear by rememberUpdatedState(onClear)
+    
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(24.dp),
@@ -547,12 +552,12 @@ fun PatternLockDrawGrid(
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragStart = { offset ->
-                            onClear()
+                            currentOnClear()
                             dragPosition = offset
                             nodePositions.forEach { (index, nodeOffset) ->
                                 val distance = (nodeOffset - offset).getDistance()
                                 if (distance < collisionRadius) {
-                                    onNodeAdded(index)
+                                    currentOnNodeAdded(index)
                                 }
                             }
                         },
@@ -563,19 +568,19 @@ fun PatternLockDrawGrid(
                             nodePositions.forEach { (index, nodeOffset) ->
                                 val distance = (nodeOffset - currentPos).getDistance()
                                 if (distance < collisionRadius) {
-                                    onNodeAdded(index)
+                                    currentOnNodeAdded(index)
                                 }
                             }
                         },
                         onDragEnd = {
                             dragPosition = null
-                            if (patternBuffer.isNotEmpty()) {
-                                onSubmit()
+                            if (currentPatternBuffer.isNotEmpty()) {
+                                currentOnSubmit()
                             }
                         },
                         onDragCancel = {
                             dragPosition = null
-                            onClear()
+                            currentOnClear()
                         }
                     )
                 }

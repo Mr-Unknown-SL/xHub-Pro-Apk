@@ -8,6 +8,7 @@ import com.example.data.BookmarkEntity
 import com.example.data.BookmarkRepository
 import com.example.data.PrefsManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -31,6 +32,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val prefsManager = PrefsManager(application)
     private val database = AppDatabase.getDatabase(application)
     private val repository = BookmarkRepository(database.bookmarkDao())
+    private var isProcessingPin = false
 
     // Bookmarks UI state from Database Flow
     val bookmarks: StateFlow<List<BookmarkEntity>> = repository.allBookmarks
@@ -210,6 +212,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // PIN Typing Core logic
     fun inputDigit(digit: String) {
+        if (isProcessingPin) return
         _errorMessage.value = null
         val limit = if (_activeLockStyle.value == "6_pin") 6 else 4
         if (_pinBuffer.value.length < limit) {
@@ -217,12 +220,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             
             // Auto validate PIN code upon completing limit length
             if (_pinBuffer.value.length == limit) {
-                processPinSubmission()
+                isProcessingPin = true
+                viewModelScope.launch {
+                    delay(1000) // Render all dots first for 1 second as user requested
+                    processPinSubmission()
+                    isProcessingPin = false
+                }
             }
         }
     }
 
     fun inputBackspace() {
+        if (isProcessingPin) return
         if (_pinBuffer.value.isNotEmpty()) {
             _pinBuffer.value = _pinBuffer.value.dropLast(1)
         }
@@ -273,7 +282,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     _authState.value = PinAuthState.Unlocked
                     checkWelcomeDialogStatus()
                 } else {
-                    _errorMessage.value = "Incorrect pattern, try again!"
+                    _errorMessage.value = "wrong pattern. try again!"
                 }
             }
             else -> {}
@@ -293,6 +302,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // Common input reset
     fun clearInput() {
+        if (isProcessingPin) return
         _pinBuffer.value = ""
         _patternBuffer.value = emptyList()
         _tempSetupPin.value = ""
