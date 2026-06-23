@@ -16,7 +16,7 @@ class PrefsManager(context: Context) {
     }
 
     fun getAppTheme(): String {
-        return prefs.getString(KEY_APP_THEME, "system") ?: "system"
+        return prefs.getString(KEY_APP_THEME, "light") ?: "light"
     }
 
     fun setAppTheme(theme: String) {
@@ -86,5 +86,13 @@ class PrefsManager(context: Context) {
 
     fun setWelcomeDismissed(dismissed: Boolean) {
         prefs.edit().putBoolean(KEY_WELCOME_DISMISSED, dismissed).apply()
+    }
+
+    fun getFavoriteUrls(): Set<String> {
+        return prefs.getStringSet("favorite_urls", emptySet()) ?: emptySet()
+    }
+
+    fun setFavoriteUrls(urls: Set<String>) {
+        prefs.edit().putStringSet("favorite_urls", urls).apply()
     }
 }

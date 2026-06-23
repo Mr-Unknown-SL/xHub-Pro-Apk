@@ -12,6 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -24,7 +25,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -199,39 +203,24 @@ fun LoadingSyncScreen() {
                         scaleX = pulseScale
                         scaleY = pulseScale
                     }
-                    .size(110.dp)
+                    .size(220.dp)
                     .background(
-                        Brush.linearGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.primaryContainer,
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                            )
-                        ),
-                        shape = RoundedCornerShape(28.dp)
+                        color = Color.White,
+                        shape = RoundedCornerShape(24.dp)
                     )
-                    .border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(28.dp)),
+                    .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp))
+                    .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    "X",
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.displayMedium.copy(
-                        fontWeight = FontWeight.Black,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Serif
-                    )
+                Image(
+                    painter = painterResource(id = R.drawable.xhub_logo),
+                    contentDescription = "xHub Pro Logo",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
                 )
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
-
-            Text(
-                text = "xHub Pro",
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 1.5.sp
-                ),
-                color = MaterialTheme.colorScheme.primary
-            )
+            Spacer(modifier = Modifier.height(24.dp))
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -251,11 +240,8 @@ fun LoadingSyncScreen() {
                 modifier = Modifier
                     .width(160.dp)
                     .height(4.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f),
-                        shape = CircleShape
-                    )
                     .clip(CircleShape)
+                    .background(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f))
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val w = size.width
@@ -305,7 +291,8 @@ fun AppNavigation(viewModel: AppViewModel) {
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val activeLockStyle by viewModel.activeLockStyle.collectAsStateWithLifecycle()
     val patternBuffer by viewModel.patternBuffer.collectAsStateWithLifecycle()
-
+    val favoriteUrls by viewModel.favoriteUrls.collectAsStateWithLifecycle()
+ 
     if (isSyncing) {
         LoadingSyncScreen()
     } else if (authState != PinAuthState.Unlocked) {
@@ -331,9 +318,11 @@ fun AppNavigation(viewModel: AppViewModel) {
             activeUrl = activeUrl,
             activeName = activeName,
             bookmarks = bookmarks,
+            favoriteUrls = favoriteUrls,
             showWelcomeDialog = showWelcomeDialog,
             themeMode = themeMode,
             onUrlSelected = { name, url -> viewModel.selectUrl(name, url) },
+            onToggleFavorite = { url -> viewModel.toggleFavorite(url) },
             onDismissWelcome = { viewModel.dismissWelcome() },
             onResetPin = { viewModel.resetPin() },
             onThemeChange = { mode -> viewModel.setThemeMode(mode) }

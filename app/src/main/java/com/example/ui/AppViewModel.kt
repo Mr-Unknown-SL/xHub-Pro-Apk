@@ -81,6 +81,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _themeMode = MutableStateFlow(prefsManager.getAppTheme())
     val themeMode: StateFlow<String> = _themeMode.asStateFlow()
 
+    // Favorite Urls state
+    private val _favoriteUrls = MutableStateFlow<Set<String>>(prefsManager.getFavoriteUrls())
+    val favoriteUrls: StateFlow<Set<String>> = _favoriteUrls.asStateFlow()
+
     // Synchronisation state
     private val _isSyncing = MutableStateFlow(true)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
@@ -98,7 +102,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     _authState.value = PinAuthState.SetupWelcome
                 }
             } else {
-                _authState.value = PinAuthState.RequestPin
+                val currentStyle = prefsManager.getLockStyle()
+                if (currentStyle == "none") {
+                    _authState.value = PinAuthState.Unlocked
+                } else {
+                    _authState.value = PinAuthState.RequestPin
+                }
             }
 
             // Sync websites list from custom GitHub repo
@@ -164,7 +173,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _activeLockStyle.value = style
         _errorMessage.value = null
         clearInput()
-        _authState.value = PinAuthState.SetupLock
+        if (style == "none") {
+            prefsManager.setSetupCompleted(true)
+            prefsManager.setWelcomeDismissed(true)
+            _authState.value = PinAuthState.Unlocked
+            checkWelcomeDialogStatus()
+        } else {
+            _authState.value = PinAuthState.SetupLock
+        }
     }
 
     fun reverseToChooseStyle() {
@@ -178,6 +194,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             prefsManager.setAppTheme(mode)
             _themeMode.value = mode
         }
+    }
+
+    // Toggle favorite URL status
+    fun toggleFavorite(url: String) {
+        val currentSet = prefsManager.getFavoriteUrls().toMutableSet()
+        if (currentSet.contains(url)) {
+            currentSet.remove(url)
+        } else {
+            currentSet.add(url)
+        }
+        prefsManager.setFavoriteUrls(currentSet)
+        _favoriteUrls.value = currentSet
     }
 
     // PIN Typing Core logic
@@ -319,7 +347,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // Dynamic address routing
     fun selectUrl(name: String, url: String) {
-        var formattedUrl = url.trim()
+        val trimmed = url.trim()
+        if (trimmed.isEmpty()) {
+            _activeUrl.value = ""
+            _activeName.value = name
+            return
+        }
+        var formattedUrl = trimmed
         if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
             formattedUrl = "https://$formattedUrl"
         }

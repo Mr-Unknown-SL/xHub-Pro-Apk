@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
@@ -249,6 +250,13 @@ fun PinLockScreen(
                                 desc = "Extra secure complex digit layout lock",
                                 icon = Icons.Filled.Lock,
                                 onClick = { onSelectStyle("6_pin") }
+                            )
+
+                            LockStyleSelectCard(
+                                title = "None (Direct Access)",
+                                desc = "Bypass secure lock screen and open workspace directly",
+                                icon = Icons.Filled.Lock,
+                                onClick = { onSelectStyle("none") }
                             )
                         }
                     }
@@ -555,8 +563,11 @@ fun PatternLockDrawGrid(
 ) {
     val nodePositions = remember { mutableStateMapOf<Int, Offset>() }
     var dragPosition by remember { mutableStateOf<Offset?>(null) }
+    var boxPositionInRoot by remember { mutableStateOf(Offset.Zero) }
     val primaryColor = MaterialTheme.colorScheme.primary
     val outlineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+    val density = LocalDensity.current
+    val collisionRadius = remember(density) { with(density) { 36.dp.toPx() } }
     
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -569,6 +580,9 @@ fun PatternLockDrawGrid(
                 .size(280.dp)
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f), RoundedCornerShape(16.dp))
                 .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+                .onGloballyPositioned { layoutCoordinates ->
+                    boxPositionInRoot = layoutCoordinates.positionInRoot()
+                }
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragStart = { offset ->
@@ -576,17 +590,18 @@ fun PatternLockDrawGrid(
                             dragPosition = offset
                             nodePositions.forEach { (index, nodeOffset) ->
                                 val distance = (nodeOffset - offset).getDistance()
-                                if (distance < 50f) {
+                                if (distance < collisionRadius) {
                                     onNodeAdded(index)
                                 }
                             }
                         },
                         onDrag = { change, dragAmount ->
+                            change.consume()
                             val currentPos = change.position
                             dragPosition = currentPos
-                            nodePositions.forEach { (index, offset) ->
-                                val distance = (offset - currentPos).getDistance()
-                                if (distance < 50f) {
+                            nodePositions.forEach { (index, nodeOffset) ->
+                                val distance = (nodeOffset - currentPos).getDistance()
+                                if (distance < collisionRadius) {
                                     onNodeAdded(index)
                                 }
                             }
@@ -661,12 +676,12 @@ fun PatternLockDrawGrid(
                                 modifier = Modifier
                                     .size(54.dp)
                                     .onGloballyPositioned { layoutCoordinates ->
-                                        // Store accurate coordinate offsets
-                                        val parentPos = layoutCoordinates.positionInParent()
+                                        // Store accurate coordinate offsets relative to the main Box
+                                        val parentPos = layoutCoordinates.positionInRoot()
                                         val size = layoutCoordinates.size
                                         nodePositions[idx] = Offset(
-                                            parentPos.x + size.width / 2f,
-                                            parentPos.y + size.height / 2f
+                                            parentPos.x + size.width / 2f - boxPositionInRoot.x,
+                                            parentPos.y + size.height / 2f - boxPositionInRoot.y
                                         )
                                     },
                                 contentAlignment = Alignment.Center

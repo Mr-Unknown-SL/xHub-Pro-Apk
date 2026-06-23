@@ -29,19 +29,33 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.content.Context
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
+import com.example.R
 import coil.compose.AsyncImage
 import com.example.data.BookmarkEntity
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun DashboardScreen(
     activeUrl: String,
     activeName: String,
     bookmarks: List<BookmarkEntity>,
+    favoriteUrls: Set<String>,
     showWelcomeDialog: Boolean,
     themeMode: String,
     onUrlSelected: (String, String) -> Unit,
+    onToggleFavorite: (String) -> Unit,
     onDismissWelcome: () -> Unit,
     onResetPin: () -> Unit,
     onThemeChange: (String) -> Unit
@@ -50,6 +64,21 @@ fun DashboardScreen(
     val scope = rememberCoroutineScope()
     var insideSettings by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
+
+    // Bottom Tab selection state
+    var currentTab by remember { mutableStateOf("home") }
+
+    // Internet connectivity check state
+    val context = LocalContext.current
+    var showNoNetDialog by remember { mutableStateOf(false) }
+    var showNoNetPage by remember { mutableStateOf(false) }
+    var retryCount by remember { mutableStateOf(0) }
+
+    LaunchedEffect(Unit) {
+        if (!isInternetAvailable(context)) {
+            showNoNetDialog = true
+        }
+    }
 
     // Generates a colorful background for site initials avatar placeholders if image fails to load
     fun getAvatarBrush(char: String): Brush {
@@ -170,11 +199,12 @@ fun DashboardScreen(
                         .weight(1f)
                         .fillMaxWidth()
                 ) {
-                    val filteredBookmarks = remember(bookmarks, searchQuery) {
+                    val sortedAndFilteredBookmarks = remember(bookmarks, searchQuery) {
+                        val sorted = bookmarks.sortedBy { it.name.lowercase() }
                         if (searchQuery.isBlank()) {
-                            bookmarks
+                            sorted
                         } else {
-                            bookmarks.filter {
+                            sorted.filter {
                                 it.name.contains(searchQuery, ignoreCase = true) ||
                                 it.url.contains(searchQuery, ignoreCase = true)
                             }
@@ -194,7 +224,7 @@ fun DashboardScreen(
                                 modifier = Modifier.padding(24.dp)
                             )
                         }
-                    } else if (filteredBookmarks.isEmpty()) {
+                    } else if (sortedAndFilteredBookmarks.isEmpty()) {
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
@@ -232,15 +262,19 @@ fun DashboardScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            items(filteredBookmarks, key = { it.id }) { item ->
+                            items(sortedAndFilteredBookmarks, key = { it.id }) { item ->
                                 val isSelected = item.url == activeUrl
                                 NavigationItemRow(
                                     item = item,
                                     isSelected = isSelected,
                                     avatarBrush = getAvatarBrush(item.logoChar),
+                                    isFavorite = favoriteUrls.contains(item.url),
                                     onClick = {
                                         onUrlSelected(item.name, item.url)
                                         scope.launch { drawerState.close() }
+                                    },
+                                    onToggleFavorite = {
+                                        onToggleFavorite(item.url)
                                     }
                                 )
                             }
@@ -313,22 +347,80 @@ fun DashboardScreen(
                         }
                     },
                     title = {
-                        Column {
-                            Text(
-                                text = if (insideSettings) "Settings Page" else "xHub Pro",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = if (insideSettings) "Configure parameters offline" else activeName,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                        if (insideSettings) {
+                            Column {
+                                Text(
+                                    text = "Settings Page",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = "Configure parameters offline",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp)
+                            ) {
+                                // Rounded container for logo to display beautifully with transparency / high contrast
+                                Box(
+                                    modifier = Modifier
+                                        .height(34.dp)
+                                        .width(72.dp)
+                                        .background(Color.White, shape = RoundedCornerShape(8.dp))
+                                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                                        .padding(4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.xhub_logo),
+                                        contentDescription = "xHub Logo",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Fit
+                                    )
+                                }
+                                if (activeUrl.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = activeName,
+                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                } else {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Secure Hub Launcher",
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
                         }
                     },
                     actions = {
+                        // Quick Web Close Action Row
+                        if (activeUrl.isNotEmpty() && !insideSettings) {
+                            IconButton(
+                                onClick = { onUrlSelected("", "") }, // Clears active URL, returning to Homepage Launcher
+                                modifier = Modifier.testTag("appbar_close_web_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Close,
+                                    contentDescription = "Close Web Session",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+
                         // Directly clickable single Theme icon switcher instead of a dropdown.
                         IconButton(
                             onClick = {
@@ -364,6 +456,37 @@ fun DashboardScreen(
                     )
                 )
             },
+            bottomBar = {
+                if (!insideSettings && !showNoNetPage) {
+                    NavigationBar(
+                        modifier = Modifier.fillMaxWidth(),
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ) {
+                        NavigationBarItem(
+                            selected = activeUrl.isEmpty() && currentTab == "home",
+                            onClick = {
+                                if (activeUrl.isNotEmpty()) {
+                                    onUrlSelected("", "")
+                                }
+                                currentTab = "home"
+                            },
+                            icon = { Icon(Icons.Filled.Home, contentDescription = "Home Tab") },
+                            label = { Text("Home") }
+                        )
+                        NavigationBarItem(
+                            selected = activeUrl.isEmpty() && currentTab == "favorite",
+                            onClick = {
+                                if (activeUrl.isNotEmpty()) {
+                                    onUrlSelected("", "")
+                                }
+                                currentTab = "favorite"
+                            },
+                            icon = { Icon(Icons.Filled.Favorite, contentDescription = "Favorites Tab") },
+                            label = { Text("Favorites") }
+                        )
+                    }
+                }
+            },
             modifier = Modifier.fillMaxSize()
         ) { innerPadding ->
             Box(
@@ -371,7 +494,24 @@ fun DashboardScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                if (insideSettings) {
+                if (showNoNetPage) {
+                    NoConnectionScreen(
+                        onRetry = {
+                            if (isInternetAvailable(context)) {
+                                showNoNetPage = false
+                                showNoNetDialog = false
+                                retryCount = 0
+                                Toast.makeText(context, "Connected successfully!", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "Network still unavailable.", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onExit = {
+                            (context as? android.app.Activity)?.finishAndRemoveTask()
+                            java.lang.System.exit(0)
+                        }
+                    )
+                } else if (insideSettings) {
                     // --- SECURITY SETTINGS SUB PAGE ---
                     SettingsContentPage(
                         onResetLock = {
@@ -382,9 +522,25 @@ fun DashboardScreen(
                 } else {
                     // Host Private Web Engine
                     if (activeUrl.isEmpty()) {
-                        EmptySiteSelectPlaceholder(onOpenMenu = {
-                            scope.launch { drawerState.open() }
-                        })
+                        if (currentTab == "home") {
+                            HomeDashboardContent(
+                                sortedBookmarkingList = bookmarks,
+                                searchQuery = searchQuery,
+                                favoriteUrls = favoriteUrls,
+                                onUrlSelected = onUrlSelected,
+                                onToggleFavorite = onToggleFavorite,
+                                onOpenDrawer = {
+                                    scope.launch { drawerState.open() }
+                                }
+                            )
+                        } else {
+                            FavoriteDashboardContent(
+                                allBookmarkingList = bookmarks,
+                                favoriteUrls = favoriteUrls,
+                                onUrlSelected = onUrlSelected,
+                                onToggleFavorite = onToggleFavorite
+                            )
+                        }
                     } else {
                         AdvancedWebView(
                             url = activeUrl,
@@ -396,6 +552,66 @@ fun DashboardScreen(
                 }
             }
         }
+    }
+
+    // NETWORK OFFLINE DETECTOR DIALOG
+    if (showNoNetDialog) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Connection Lost",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                }
+            },
+            text = {
+                Text(
+                    text = "No internet connection detected on portal launcher bootstrap. Please recheck your data credentials, retry, or exit the workspace.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (isInternetAvailable(context)) {
+                            showNoNetDialog = false
+                            showNoNetPage = false
+                            retryCount = 0
+                            Toast.makeText(context, "Connected!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            retryCount += 1
+                            if (retryCount >= 3) {
+                                showNoNetDialog = false
+                                showNoNetPage = true
+                            } else {
+                                Toast.makeText(context, "Offline. Retries left: ${3 - retryCount}", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                ) {
+                    Text("Retry")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        (context as? android.app.Activity)?.finishAndRemoveTask()
+                        java.lang.System.exit(0)
+                    }
+                ) {
+                    Text("Exit")
+                }
+            }
+        )
     }
 
     // FIRST-TIME USER INTRODUCTORY WELCOME POPUP
@@ -634,84 +850,127 @@ fun SettingsContentPage(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun NavigationItemRow(
     item: BookmarkEntity,
     isSelected: Boolean,
     avatarBrush: Brush,
-    onClick: () -> Unit
+    isFavorite: Boolean,
+    onClick: () -> Unit,
+    onToggleFavorite: () -> Unit
 ) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .bounceClick(onClick = onClick)
-            .testTag("bookmark_item_${item.id}"),
-        color = if (isSelected) {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-        } else {
-            Color.Transparent
-        },
-        shape = RoundedCornerShape(10.dp)
-    ) {
-        Row(
+    var showDropdown by remember { mutableStateOf(false) }
+
+    Box {
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .bounceCombinedClick(
+                    onClick = onClick,
+                    onLongClick = { showDropdown = true }
+                )
+                .testTag("bookmark_item_${item.id}"),
+            color = if (isSelected) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+            } else {
+                Color.Transparent
+            },
+            shape = RoundedCornerShape(10.dp)
         ) {
-            // High Resolution Favicon Loader with Auto Initial Letter Gradient Fallback
-            var isImageError by remember { mutableStateOf(false) }
-
-            Box(
+            Row(
                 modifier = Modifier
-                    .size(38.dp)
-                    .background(
-                        textColorBrush(isImageError, avatarBrush, MaterialTheme.colorScheme.surfaceVariant),
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (!isImageError) {
-                    val rootDomain = extractDomain(item.url)
-                    AsyncImage(
-                        model = "https://www.google.com/s2/favicons?sz=64&domain=$rootDomain",
-                        contentDescription = "favicon for ${item.name}",
-                        modifier = Modifier
-                            .size(22.dp)
-                            .clip(CircleShape),
-                        onError = { isImageError = true },
-                        onSuccess = { isImageError = false }
-                    )
-                }
+                // High Resolution Favicon Loader with Auto Initial Letter Gradient Fallback
+                var isImageError by remember { mutableStateOf(false) }
 
-                if (isImageError) {
-                    Text(
-                        text = item.logoChar,
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.ExtraBold)
-                    )
-                }
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = item.name,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = if (isSelected) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .background(
+                            textColorBrush(isImageError, avatarBrush, MaterialTheme.colorScheme.surfaceVariant),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (!isImageError) {
+                        val rootDomain = extractDomain(item.url)
+                        AsyncImage(
+                            model = "https://www.google.com/s2/favicons?sz=64&domain=$rootDomain",
+                            contentDescription = "favicon for ${item.name}",
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clip(CircleShape),
+                            onError = { isImageError = true },
+                            onSuccess = { isImageError = false }
+                        )
                     }
-                )
-                Text(
-                    text = item.url,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+
+                    if (isImageError) {
+                        Text(
+                            text = item.logoChar,
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.ExtraBold)
+                        )
+                    }
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = item.name,
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
+                        )
+                        if (isFavorite) {
+                            Icon(
+                                imageVector = Icons.Filled.Favorite,
+                                contentDescription = "Favorite Portal",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                    Text(
+                        text = item.url,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
+        }
+
+        DropdownMenu(
+            expanded = showDropdown,
+            onDismissRequest = { showDropdown = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text(if (isFavorite) "Remove from Favorites" else "Add to Favorites") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Filled.FavoriteBorder else Icons.Filled.Favorite,
+                        contentDescription = null,
+                        tint = if (isFavorite) Color.Gray else MaterialTheme.colorScheme.primary
+                    )
+                },
+                onClick = {
+                    showDropdown = false
+                    onToggleFavorite()
+                }
+            )
         }
     }
 }
@@ -760,6 +1019,37 @@ private fun Modifier.bounceClick(onClick: () -> Unit = {}): Modifier {
             interactionSource = interactionSource,
             indication = LocalIndication.current,
             onClick = onClick
+        )
+}
+
+// PREMIUM COMBINED CLICK EMBEDDED MODIFIER
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun Modifier.bounceCombinedClick(
+    onClick: () -> Unit = {},
+    onLongClick: () -> Unit = {}
+): Modifier {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.93f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "bounce"
+    )
+
+    return this
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .combinedClickable(
+            interactionSource = interactionSource,
+            indication = LocalIndication.current,
+            onClick = onClick,
+            onLongClick = onLongClick
         )
 }
 
@@ -878,4 +1168,422 @@ fun EmptySiteSelectPlaceholder(onOpenMenu: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+fun HomeDashboardContent(
+    sortedBookmarkingList: List<BookmarkEntity>,
+    searchQuery: String,
+    favoriteUrls: Set<String>,
+    onUrlSelected: (String, String) -> Unit,
+    onToggleFavorite: (String) -> Unit,
+    onOpenDrawer: () -> Unit
+) {
+    var query by remember { mutableStateOf("") }
+    val sorted = remember(sortedBookmarkingList) {
+        sortedBookmarkingList.sortedBy { it.name.lowercase() }
+    }
+    val filteredList = remember(sorted, query) {
+        if (query.isBlank()) {
+            sorted
+        } else {
+            sorted.filter {
+                it.name.contains(query, ignoreCase = true) ||
+                it.url.contains(query, ignoreCase = true)
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // High fidelity elegant hero card
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.secondary
+                        )
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                )
+                .padding(20.dp)
+        ) {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.Lock,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Encapsulated Private Engine",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                        color = Color.White
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Welcome to xHub Pro. Access isolated secure sites with full privacy footprints encapsulation.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.85f)
+                )
+            }
+        }
+
+        // Search Bar Row on Homepage
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .testTag("home_search_bar"),
+            placeholder = { Text("Search portals directly...", style = MaterialTheme.typography.bodyMedium) },
+            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = "Search Icon") },
+            trailingIcon = {
+                if (query.isNotEmpty()) {
+                    IconButton(onClick = { query = "" }) {
+                        Icon(Icons.Filled.Close, contentDescription = "Clear")
+                    }
+                }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface
+            )
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Portals List
+        if (sortedBookmarkingList.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Connecting and synchronizing database ports...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else if (filteredList.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No secure sites match your search",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                item {
+                    Text(
+                        text = "Secure Portals (Sorted A-Z)",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                }
+
+                items(filteredList, key = { it.id }) { item ->
+                    // Avatar background
+                    val avatarHash = item.logoChar.hashCode()
+                    val avatarBrush = remember(avatarHash) {
+                        val colors = when (avatarHash % 5) {
+                            0 -> listOf(Color(0xFFE91E63), Color(0xFFFF4081))
+                            1 -> listOf(Color(0xFF9C27B0), Color(0xFFE040FB))
+                            2 -> listOf(Color(0xFF00BCD4), Color(0xFF00E5FF))
+                            3 -> listOf(Color(0xFF4CAF50), Color(0xFF69F0AE))
+                            else -> listOf(Color(0xFFFF9800), Color(0xFFFFAB40))
+                        }
+                        Brush.linearGradient(colors)
+                    }
+
+                    NavigationItemRow(
+                        item = item,
+                        isSelected = false,
+                        avatarBrush = avatarBrush,
+                        isFavorite = favoriteUrls.contains(item.url),
+                        onClick = { onUrlSelected(item.name, item.url) },
+                        onToggleFavorite = { onToggleFavorite(item.url) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FavoriteDashboardContent(
+    allBookmarkingList: List<BookmarkEntity>,
+    favoriteUrls: Set<String>,
+    onUrlSelected: (String, String) -> Unit,
+    onToggleFavorite: (String) -> Unit
+) {
+    val sorted = remember(allBookmarkingList) {
+        allBookmarkingList.sortedBy { it.name.lowercase() }
+    }
+    val favoriteList = remember(sorted, favoriteUrls) {
+        sorted.filter { favoriteUrls.contains(it.url) }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // Visual Header
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.secondary,
+                            MaterialTheme.colorScheme.tertiary
+                        )
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                )
+                .padding(20.dp)
+        ) {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.Favorite,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Your Favorites Registry",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                        color = Color.White
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Launch your most frequently accessed private links here instantly, outside the main drawer.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.85f)
+                )
+            }
+        }
+
+        if (favoriteList.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Filled.FavoriteBorder,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                        modifier = Modifier.size(72.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "No favorites configured",
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Touch and hold (long-press) any portal in the site list drawer or home tab, then select 'Add to Favorites'.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 24.dp)
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                item {
+                    Text(
+                        text = "Bookmarked Favorites (${favoriteList.size})",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                }
+
+                items(favoriteList, key = { item -> item.url }) { item ->
+                    val avatarHash = item.logoChar.hashCode()
+                    val avatarBrush = remember(avatarHash) {
+                        val colors = when (avatarHash % 5) {
+                            0 -> listOf(Color(0xFFE91E63), Color(0xFFFF4081))
+                            1 -> listOf(Color(0xFF9C27B0), Color(0xFFE040FB))
+                            2 -> listOf(Color(0xFF00BCD4), Color(0xFF00E5FF))
+                            3 -> listOf(Color(0xFF4CAF50), Color(0xFF69F0AE))
+                            else -> listOf(Color(0xFFFF9800), Color(0xFFFFAB40))
+                        }
+                        Brush.linearGradient(colors)
+                    }
+
+                    NavigationItemRow(
+                        item = item,
+                        isSelected = false,
+                        avatarBrush = avatarBrush,
+                        isFavorite = true,
+                        onClick = { onUrlSelected(item.name, item.url) },
+                        onToggleFavorite = { onToggleFavorite(item.url) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun NoConnectionScreen(
+    onRetry: () -> Unit,
+    onExit: () -> Unit
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "noconn")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.92f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            // Center visual pulsating warning
+            Box(
+                modifier = Modifier
+                    .graphicsLayer {
+                        scaleX = pulseScale
+                        scaleY = pulseScale
+                    }
+                    .size(100.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.12f),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(50.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Text(
+                text = "Connection Lost",
+                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
+                color = MaterialTheme.colorScheme.onBackground
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = "xHub Pro is unable to bridge portals safely in offline mode.\nPlease verify your internet is turned on.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+
+            Spacer(modifier = Modifier.height(40.dp))
+
+            // Action Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Exit button
+                OutlinedButton(
+                    onClick = onExit,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                ) {
+                    Text("Exit", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+                }
+
+                // Retry Button
+                Button(
+                    onClick = onRetry,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                ) {
+                    Text("Retry", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+                }
+            }
+        }
+    }
+}
+
+fun isInternetAvailable(context: Context): Boolean {
+    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val activeNet = cm.activeNetwork ?: return false
+    val caps = cm.getNetworkCapabilities(activeNet) ?: return false
+    return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+           caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
+           caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
 }
