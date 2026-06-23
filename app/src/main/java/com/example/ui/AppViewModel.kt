@@ -247,7 +247,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         val patternString = pat.joinToString(",")
-        clearPattern() // Clear active UI lines
+        _patternBuffer.value = emptyList() // Clear active UI lines without clearing error message
 
         when (val current = _authState.value) {
             PinAuthState.SetupLock -> {
