@@ -38,6 +38,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.PinAuthState
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
+import com.example.R
 
 @Composable
 fun PinLockScreen(
@@ -83,57 +87,13 @@ fun PinLockScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(top = 40.dp)
-                    ) {
-                        // Cyber Gold Glow Circle
-                        Box(
-                            modifier = Modifier
-                                .size(96.dp)
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(
-                                            MaterialTheme.colorScheme.primaryContainer,
-                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                        )
-                                    ),
-                                    shape = RoundedCornerShape(24.dp)
-                                )
-                                .border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                "X",
-                                color = MaterialTheme.colorScheme.primary,
-                                style = MaterialTheme.typography.displayMedium.copy(
-                                    fontWeight = FontWeight.Black,
-                                    fontFamily = FontFamily.Serif
-                                )
-                            )
-                        }
+                    // High fidelity beautifully styled xHub vector logo with no background or borders as requested by user
+                    XHubCleanLogo(
+                        modifier = Modifier.padding(top = 40.dp),
+                        sizeFraction = 1.25f
+                    )
 
-                        Spacer(modifier = Modifier.height(32.dp))
-
-                        Text(
-                            text = "xHub Pro",
-                            style = MaterialTheme.typography.displaySmall.copy(
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 1.sp
-                            ),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-
-                        Text(
-                            text = "BY MR. UNKNOWN",
-                            style = MaterialTheme.typography.labelLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 3.sp
-                            ),
-                            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.8f)
-                        )
-
-                        Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(28.dp))
 
                         Surface(
                             shape = RoundedCornerShape(16.dp),
@@ -164,7 +124,6 @@ fun PinLockScreen(
                                 )
                             }
                         }
-                    }
 
                     val welcomeBtnInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                     Button(
@@ -390,7 +349,8 @@ fun PinLockScreen(
                             patternBuffer = patternBuffer,
                             onNodeAdded = onPatternNodeAdded,
                             onSubmit = onPatternSubmit,
-                            onClear = onPatternClear
+                            onClear = onPatternClear,
+                            showButtons = isSetupMode
                         )
                     } else {
                         // DIGIT PIN CODE STATUS ROW INDICATOR
@@ -559,7 +519,8 @@ fun PatternLockDrawGrid(
     patternBuffer: List<Int>,
     onNodeAdded: (Int) -> Unit,
     onSubmit: () -> Unit,
-    onClear: () -> Unit
+    onClear: () -> Unit,
+    showButtons: Boolean = true
 ) {
     val nodePositions = remember { mutableStateMapOf<Int, Offset>() }
     var dragPosition by remember { mutableStateOf<Offset?>(null) }
@@ -706,34 +667,36 @@ fun PatternLockDrawGrid(
             }
         }
 
-        // Drawer buttons
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.fillMaxWidth(0.8f)
-        ) {
-            val resetInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-            OutlinedButton(
-                onClick = onClear,
-                interactionSource = resetInteractionSource,
-                modifier = Modifier
-                    .weight(1f)
-                    .pressScale(resetInteractionSource),
-                shape = RoundedCornerShape(10.dp)
+        if (showButtons) {
+            // Drawer buttons
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxWidth(0.8f)
             ) {
-                Text("RESET")
-            }
-            
-            val continueInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-            Button(
-                onClick = { if (patternBuffer.isNotEmpty()) onSubmit() },
-                interactionSource = continueInteractionSource,
-                modifier = Modifier
-                    .weight(1f)
-                    .pressScale(continueInteractionSource),
-                shape = RoundedCornerShape(10.dp),
-                enabled = patternBuffer.isNotEmpty()
-            ) {
-                Text("CONTINUE")
+                val resetInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                OutlinedButton(
+                    onClick = onClear,
+                    interactionSource = resetInteractionSource,
+                    modifier = Modifier
+                        .weight(1f)
+                        .pressScale(resetInteractionSource),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("RESET")
+                }
+                
+                val continueInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                Button(
+                    onClick = { if (patternBuffer.isNotEmpty()) onSubmit() },
+                    interactionSource = continueInteractionSource,
+                    modifier = Modifier
+                        .weight(1f)
+                        .pressScale(continueInteractionSource),
+                    shape = RoundedCornerShape(10.dp),
+                    enabled = patternBuffer.isNotEmpty()
+                ) {
+                    Text("CONTINUE")
+                }
             }
         }
     }

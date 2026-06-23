@@ -242,12 +242,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val pat = _patternBuffer.value
         if (pat.size < 3) {
             _errorMessage.value = "Connect at least 3 dots to set a pattern!"
-            _patternBuffer.value = emptyList()
+            clearPattern()
             return
         }
 
         val patternString = pat.joinToString(",")
-        _patternBuffer.value = emptyList() // Clear active UI lines
+        clearPattern() // Clear active UI lines
 
         when (val current = _authState.value) {
             PinAuthState.SetupLock -> {
@@ -273,7 +273,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     _authState.value = PinAuthState.Unlocked
                     checkWelcomeDialogStatus()
                 } else {
-                    _errorMessage.value = "Incorrect pattern! Access Denied."
+                    _errorMessage.value = "Incorrect pattern, try again!"
                 }
             }
             else -> {}

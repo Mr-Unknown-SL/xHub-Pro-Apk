@@ -347,63 +347,19 @@ fun DashboardScreen(
                         }
                     },
                     title = {
-                        if (insideSettings) {
-                            Column {
-                                Text(
-                                    text = "Settings Page",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Text(
-                                    text = "Configure parameters offline",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        } else {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp)
-                            ) {
-                                // Rounded container for logo to display beautifully with transparency / high contrast
-                                Box(
-                                    modifier = Modifier
-                                        .height(34.dp)
-                                        .width(72.dp)
-                                        .background(Color.White, shape = RoundedCornerShape(8.dp))
-                                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                                        .padding(4.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Image(
-                                        painter = painterResource(id = R.drawable.xhub_logo),
-                                        contentDescription = "xHub Logo",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Fit
-                                    )
-                                }
-                                if (activeUrl.isNotEmpty()) {
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = activeName,
-                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                } else {
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Secure Hub Launcher",
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
+                        Column {
+                            Text(
+                                text = if (insideSettings) "Settings Page" else if (activeUrl.isNotEmpty()) activeName else "xHub Pro",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = if (insideSettings) "Configure parameters offline" else if (activeUrl.isEmpty()) "Secure Hub Launcher" else "Private Tunnel Active",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     },
                     actions = {

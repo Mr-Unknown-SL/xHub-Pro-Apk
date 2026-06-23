@@ -10,6 +10,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -40,12 +41,21 @@ import com.example.ui.AppViewModel
 import com.example.ui.PinAuthState
 import com.example.ui.components.DashboardScreen
 import com.example.ui.components.PinLockScreen
+import com.example.ui.components.XHubCleanLogo
 import com.example.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
 
     private val CHANNEL_ID = "xhub_panic_channel"
     private val NOTIFICATION_ID = 2691
+
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            showPanicNotification()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Intercept panic exit actions before UI spins up
@@ -54,6 +64,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         createNotificationChannel()
+
+        // Request POST_NOTIFICATIONS grant on modern Android versions
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
 
         setContent {
             val viewModel: AppViewModel = viewModel()
@@ -196,29 +213,16 @@ fun LoadingSyncScreen() {
                 .fillMaxWidth()
                 .padding(horizontal = 32.dp)
         ) {
-            // High fidelity beautifully glowing centered app logo
-            Box(
+            // Clean high-fidelity vector text logo with no backgrounds or borders
+            XHubCleanLogo(
                 modifier = Modifier
                     .graphicsLayer {
                         scaleX = pulseScale
                         scaleY = pulseScale
                     }
-                    .size(220.dp)
-                    .background(
-                        color = Color.White,
-                        shape = RoundedCornerShape(24.dp)
-                    )
-                    .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp))
-                    .padding(16.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.xhub_logo),
-                    contentDescription = "xHub Pro Logo",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit
-                )
-            }
+                    .padding(vertical = 12.dp),
+                sizeFraction = 1.15f
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
