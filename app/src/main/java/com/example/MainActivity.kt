@@ -65,13 +65,6 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         createNotificationChannel()
 
-        // Request POST_NOTIFICATIONS grant on modern Android versions
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                requestPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-            }
-        }
-
         setContent {
             val viewModel: AppViewModel = viewModel()
             val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
@@ -314,6 +307,7 @@ fun AppNavigation(viewModel: AppViewModel) {
             onPatternClear = { viewModel.clearPattern() },
             onSelectStyle = { viewModel.selectLockStyle(it) },
             onProceedWelcome = { viewModel.proceedFromWelcome() },
+            onProceedPermissions = { viewModel.proceedFromPermissions() },
             onBackToStyles = { viewModel.reverseToChooseStyle() },
             onBiometricSuccess = { viewModel.verifyBiometricSuccess() }
         )

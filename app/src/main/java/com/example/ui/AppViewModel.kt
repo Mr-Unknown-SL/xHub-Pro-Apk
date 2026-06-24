@@ -21,6 +21,7 @@ import java.net.URL
 
 sealed class PinAuthState {
     object SetupWelcome : PinAuthState()     // Welcome page with Creator/Mr.Unknown note & Next button
+    object SetupPermissions : PinAuthState() // Permissions request screen
     object SetupChooseStyle : PinAuthState() // Panel to select Lock type: 4-pin, 6-pin, pattern, biometrics
     object SetupLock : PinAuthState()        // Input code/pattern first time
     object SetupConfirmPin : PinAuthState()  // Input code/pattern second time to confirm
@@ -167,6 +168,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // Setup Navigation Controllers
     fun proceedFromWelcome() {
+        _authState.value = PinAuthState.SetupPermissions
+    }
+
+    fun proceedFromPermissions() {
         _authState.value = PinAuthState.SetupChooseStyle
     }
 

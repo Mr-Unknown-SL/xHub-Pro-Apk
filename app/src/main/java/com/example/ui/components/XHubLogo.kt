@@ -19,9 +19,9 @@ fun XHubCleanLogo(
     sizeFraction: Float = 1.0f
 ) {
     Column(
+        modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = modifier
+        verticalArrangement = Arrangement.Center
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -30,47 +30,47 @@ fun XHubCleanLogo(
             // "X" in bold bright red font
             Text(
                 text = "X",
-                color = Color(0xFFD32F2F), // Bold textured bright red
-                style = MaterialTheme.typography.displayLarge.copy(
-                    fontWeight = FontWeight.Black,
-                    fontFamily = FontFamily.Serif,
-                    fontSize = (64 * sizeFraction).sp
-                )
-            )
-            // "HUB" in bold/black font
-            Text(
-                text = "HUB",
-                color = MaterialTheme.colorScheme.onBackground, // Adapts to Dark/Light mode perfectly
+                color = Color(0xFFD32F2F), // Textured/bright security red
                 style = MaterialTheme.typography.displayLarge.copy(
                     fontWeight = FontWeight.Black,
                     fontFamily = FontFamily.SansSerif,
-                    fontSize = (64 * sizeFraction).sp
+                    fontSize = (54 * sizeFraction).sp
+                )
+            )
+            // "HUB" in bold/black font adapting to system theme
+            Text(
+                text = "HUB",
+                color = MaterialTheme.colorScheme.onBackground,
+                style = MaterialTheme.typography.displayLarge.copy(
+                    fontWeight = FontWeight.Black,
+                    fontFamily = FontFamily.SansSerif,
+                    fontSize = (54 * sizeFraction).sp
                 )
             )
         }
 
         Spacer(modifier = Modifier.height((2 * sizeFraction).dp))
 
-        // Thin, clean, solid horizontal divider line
+        // Divider line
         Box(
             modifier = Modifier
-                .width((200 * sizeFraction).dp)
-                .height((1.5f * sizeFraction).dp)
-                .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f))
+                .width((140 * sizeFraction).dp)
+                .height((2 * sizeFraction).dp)
+                .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
         )
 
-        Spacer(modifier = Modifier.height((6 * sizeFraction).dp))
+        Spacer(modifier = Modifier.height((4 * sizeFraction).dp))
 
-        // Text "BY MR.UNKNOWN" in clean, elegant, spaced-out sans-serif font
+        // "BY MR.UNKNOWN" in capital spaced-out letters
         Text(
             text = "BY MR.UNKNOWN",
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-            style = MaterialTheme.typography.labelLarge.copy(
+            style = MaterialTheme.typography.labelSmall.copy(
                 fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.SansSerif,
-                letterSpacing = (3 * sizeFraction).sp,
-                fontSize = (11 * sizeFraction).sp
+                letterSpacing = (2.5 * sizeFraction).sp,
+                fontSize = (10 * sizeFraction).sp
             )
         )
     }
 }
+

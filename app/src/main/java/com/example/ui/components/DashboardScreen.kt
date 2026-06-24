@@ -96,7 +96,7 @@ fun DashboardScreen(
     // Modal Drawer Wrapper
     ModalNavigationDrawer(
         drawerState = drawerState,
-        gesturesEnabled = !insideSettings, // Disable swipe drawer when looking at parameters
+        gesturesEnabled = false, // Disable swipe/drag to open/close drawer as requested
         drawerContent = {
             ModalDrawerSheet(
                 modifier = Modifier
@@ -120,7 +120,10 @@ fun DashboardScreen(
                         .padding(24.dp)
                 ) {
                     Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Icon(
                                 imageVector = Icons.Filled.Lock,
                                 contentDescription = "Private Web Engine",
@@ -136,6 +139,19 @@ fun DashboardScreen(
                                 ),
                                 color = MaterialTheme.colorScheme.onSurface
                             )
+                            Spacer(modifier = Modifier.weight(1f))
+                            IconButton(
+                                onClick = {
+                                    scope.launch { drawerState.close() }
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Close,
+                                    contentDescription = "Close Drawer",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
@@ -264,18 +280,24 @@ fun DashboardScreen(
                         ) {
                             items(sortedAndFilteredBookmarks, key = { it.id }) { item ->
                                 val isSelected = item.url == activeUrl
+                                val onClickState = remember(item, onUrlSelected) {
+                                    {
+                                        onUrlSelected(item.name, item.url)
+                                        scope.launch { drawerState.close() }
+                                        Unit
+                                    }
+                                }
+                                val onToggleFavoriteState = remember(item, onToggleFavorite) {
+                                    {
+                                        onToggleFavorite(item.url)
+                                    }
+                                }
                                 NavigationItemRow(
                                     item = item,
                                     isSelected = isSelected,
-                                    avatarBrush = getAvatarBrush(item.logoChar),
                                     isFavorite = favoriteUrls.contains(item.url),
-                                    onClick = {
-                                        onUrlSelected(item.name, item.url)
-                                        scope.launch { drawerState.close() }
-                                    },
-                                    onToggleFavorite = {
-                                        onToggleFavorite(item.url)
-                                    }
+                                    onClick = onClickState,
+                                    onToggleFavorite = onToggleFavoriteState
                                 )
                             }
                         }
@@ -418,6 +440,14 @@ fun DashboardScreen(
                         modifier = Modifier.fillMaxWidth(),
                         containerColor = MaterialTheme.colorScheme.surface
                     ) {
+                        val navItemColors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+
                         NavigationBarItem(
                             selected = activeUrl.isEmpty() && currentTab == "home",
                             onClick = {
@@ -427,7 +457,8 @@ fun DashboardScreen(
                                 currentTab = "home"
                             },
                             icon = { Icon(Icons.Filled.Home, contentDescription = "Home Tab") },
-                            label = { Text("Home") }
+                            label = { Text("Home") },
+                            colors = navItemColors
                         )
                         NavigationBarItem(
                             selected = activeUrl.isEmpty() && currentTab == "favorite",
@@ -438,7 +469,8 @@ fun DashboardScreen(
                                 currentTab = "favorite"
                             },
                             icon = { Icon(Icons.Filled.Favorite, contentDescription = "Favorites Tab") },
-                            label = { Text("Favorites") }
+                            label = { Text("Favorites") },
+                            colors = navItemColors
                         )
                     }
                 }
@@ -636,7 +668,7 @@ fun DashboardScreen(
                     )
 
                     Text(
-                        text = "💡 Quick Guide:\n• Slide left-to-right or tap topbar menu icon to reveal private bookmarked portals.\n• Your secure lock passcode, traces or patterns protect data integrity.",
+                        text = "💡 Quick Guide:\n• Tap topbar menu icon to reveal private bookmarked portals.\n• Your secure lock passcode, traces or patterns protect data integrity.",
                         style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -811,12 +843,26 @@ fun SettingsContentPage(
 fun NavigationItemRow(
     item: BookmarkEntity,
     isSelected: Boolean,
-    avatarBrush: Brush,
     isFavorite: Boolean,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
     var showDropdown by remember { mutableStateOf(false) }
+
+    val avatarBrush = remember(item.logoChar) {
+        val avatarHash = item.logoChar.hashCode()
+        val colors = when (avatarHash % 5) {
+            0 -> listOf(Color(0xFFE91E63), Color(0xFFFF4081))
+            1 -> listOf(Color(0xFF9C27B0), Color(0xFFE040FB))
+            2 -> listOf(Color(0xFF00BCD4), Color(0xFF00E5FF))
+            3 -> listOf(Color(0xFF4CAF50), Color(0xFF69F0AE))
+            else -> listOf(Color(0xFFFF9800), Color(0xFFFFAB40))
+        }
+        Brush.linearGradient(colors)
+    }
+
+    val rootDomain = remember(item.url) { extractDomain(item.url) }
+    val faviconModel = remember(rootDomain) { "https://www.google.com/s2/favicons?sz=64&domain=$rootDomain" }
 
     Box {
         Surface(
@@ -854,9 +900,8 @@ fun NavigationItemRow(
                     contentAlignment = Alignment.Center
                 ) {
                     if (!isImageError) {
-                        val rootDomain = extractDomain(item.url)
                         AsyncImage(
-                            model = "https://www.google.com/s2/favicons?sz=64&domain=$rootDomain",
+                            model = faviconModel,
                             contentDescription = "favicon for ${item.name}",
                             modifier = Modifier
                                 .size(22.dp)
@@ -875,7 +920,10 @@ fun NavigationItemRow(
                     }
                 }
 
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.Center
+                ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -898,13 +946,6 @@ fun NavigationItemRow(
                             )
                         }
                     }
-                    Text(
-                        text = item.url,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
                 }
             }
         }
@@ -945,10 +986,11 @@ private fun extractDomain(url: String): String {
 // Return dynamic background colors for favicon placeholders
 @Composable
 private fun textColorBrush(isError: Boolean, errorBrush: Brush, normalColor: Color): Brush {
+    val normalBrush = remember(normalColor) { Brush.linearGradient(listOf(normalColor, normalColor)) }
     return if (isError) {
         errorBrush
     } else {
-        Brush.linearGradient(listOf(normalColor, normalColor))
+        normalBrush
     }
 }
 
@@ -1269,26 +1311,19 @@ fun HomeDashboardContent(
                 }
 
                 items(filteredList, key = { it.id }) { item ->
-                    // Avatar background
-                    val avatarHash = item.logoChar.hashCode()
-                    val avatarBrush = remember(avatarHash) {
-                        val colors = when (avatarHash % 5) {
-                            0 -> listOf(Color(0xFFE91E63), Color(0xFFFF4081))
-                            1 -> listOf(Color(0xFF9C27B0), Color(0xFFE040FB))
-                            2 -> listOf(Color(0xFF00BCD4), Color(0xFF00E5FF))
-                            3 -> listOf(Color(0xFF4CAF50), Color(0xFF69F0AE))
-                            else -> listOf(Color(0xFFFF9800), Color(0xFFFFAB40))
-                        }
-                        Brush.linearGradient(colors)
+                    val onClickState = remember(item, onUrlSelected) {
+                        { onUrlSelected(item.name, item.url) }
+                    }
+                    val onToggleFavoriteState = remember(item, onToggleFavorite) {
+                        { onToggleFavorite(item.url) }
                     }
 
                     NavigationItemRow(
                         item = item,
                         isSelected = false,
-                        avatarBrush = avatarBrush,
                         isFavorite = favoriteUrls.contains(item.url),
-                        onClick = { onUrlSelected(item.name, item.url) },
-                        onToggleFavorite = { onToggleFavorite(item.url) }
+                        onClick = onClickState,
+                        onToggleFavorite = onToggleFavoriteState
                     )
                 }
             }
@@ -1404,25 +1439,19 @@ fun FavoriteDashboardContent(
                 }
 
                 items(favoriteList, key = { item -> item.url }) { item ->
-                    val avatarHash = item.logoChar.hashCode()
-                    val avatarBrush = remember(avatarHash) {
-                        val colors = when (avatarHash % 5) {
-                            0 -> listOf(Color(0xFFE91E63), Color(0xFFFF4081))
-                            1 -> listOf(Color(0xFF9C27B0), Color(0xFFE040FB))
-                            2 -> listOf(Color(0xFF00BCD4), Color(0xFF00E5FF))
-                            3 -> listOf(Color(0xFF4CAF50), Color(0xFF69F0AE))
-                            else -> listOf(Color(0xFFFF9800), Color(0xFFFFAB40))
-                        }
-                        Brush.linearGradient(colors)
+                    val onClickState = remember(item, onUrlSelected) {
+                        { onUrlSelected(item.name, item.url) }
+                    }
+                    val onToggleFavoriteState = remember(item, onToggleFavorite) {
+                        { onToggleFavorite(item.url) }
                     }
 
                     NavigationItemRow(
                         item = item,
                         isSelected = false,
-                        avatarBrush = avatarBrush,
                         isFavorite = true,
-                        onClick = { onUrlSelected(item.name, item.url) },
-                        onToggleFavorite = { onToggleFavorite(item.url) }
+                        onClick = onClickState,
+                        onToggleFavorite = onToggleFavoriteState
                     )
                 }
             }

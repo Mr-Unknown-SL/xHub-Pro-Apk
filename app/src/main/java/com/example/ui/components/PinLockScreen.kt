@@ -42,6 +42,54 @@ import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.layout.ContentScale
 import com.example.R
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import android.os.Build
+import android.provider.Settings
+import android.net.Uri
+import android.os.Environment
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
+
+@Composable
+fun ErrorMessageBox(
+    errorMessage: String?,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(52.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        AnimatedVisibility(
+            visible = errorMessage != null,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            if (errorMessage != null) {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.padding(vertical = 4.dp)
+                ) {
+                    Text(
+                        text = errorMessage,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun PinLockScreen(
@@ -59,6 +107,7 @@ fun PinLockScreen(
     onPatternClear: () -> Unit = {},
     onSelectStyle: (String) -> Unit = {},
     onProceedWelcome: () -> Unit = {},
+    onProceedPermissions: () -> Unit = {},
     onBackToStyles: () -> Unit = {},
     onBiometricSuccess: () -> Unit = {}
 ) {
@@ -147,6 +196,234 @@ fun PinLockScreen(
                                 letterSpacing = 1.sp
                             )
                         )
+                    }
+                }
+            }
+
+            // --- STATE 1.5: SECURITY PERMISSIONS SCREEN ---
+            else if (authState == PinAuthState.SetupPermissions) {
+                val context = LocalContext.current
+                var notificationGranted by remember { mutableStateOf(false) }
+                var storageGranted by remember { mutableStateOf(false) }
+                var contactsGranted by remember { mutableStateOf(false) }
+
+                fun checkAllPermissions() {
+                    notificationGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                    } else {
+                        true
+                    }
+
+                    storageGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        Environment.isExternalStorageManager()
+                    } else {
+                        ContextCompat.checkSelfPermission(context, android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+                    }
+
+                    contactsGranted = ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
+                }
+
+                val requestMultiplePermissionsLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.RequestMultiplePermissions()
+                ) { _ ->
+                    checkAllPermissions()
+                }
+
+                val manageAllFilesSettingsLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.StartActivityForResult()
+                ) { _ ->
+                    checkAllPermissions()
+                }
+
+                LaunchedEffect(Unit) {
+                    checkAllPermissions()
+                }
+
+                val lifecycleOwner = LocalLifecycleOwner.current
+                DisposableEffect(lifecycleOwner) {
+                    val observer = LifecycleEventObserver { _, event ->
+                        if (event == Lifecycle.Event.ON_RESUME) {
+                            checkAllPermissions()
+                        }
+                    }
+                    lifecycleOwner.lifecycle.addObserver(observer)
+                    onDispose {
+                        lifecycleOwner.lifecycle.removeObserver(observer)
+                    }
+                }
+
+                val allGranted = notificationGranted && storageGranted && contactsGranted
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth().weight(1f)
+                    ) {
+                        XHubCleanLogo(
+                            modifier = Modifier.padding(top = 20.dp),
+                            sizeFraction = 1.0f
+                        )
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        Text(
+                            text = "SECURITY PROTOCOL REQUIRED",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 1.5.sp
+                            ),
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "Ape secure portal eka kriyathmaka karanna thava permission kipayak avashya venava. Karunakarala pahatha permission grant karanna machan.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // Permissions list
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            // 1. Notification Permission Row
+                            PermissionRowItem(
+                                title = "Notification Access",
+                                description = "Emergency instant-lock alerts valata laba denna machan.",
+                                icon = Icons.Filled.Warning,
+                                granted = notificationGranted,
+                                onClick = {
+                                    if (!notificationGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        requestMultiplePermissionsLauncher.launch(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS))
+                                    }
+                                }
+                            )
+
+                            // 2. Storage Permission Row
+                            PermissionRowItem(
+                                title = "Files & Storage Access",
+                                description = "Private media files & logs secure karanna laba denna.",
+                                icon = Icons.Filled.List,
+                                granted = storageGranted,
+                                onClick = {
+                                    if (!storageGranted) {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                            try {
+                                                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                                                    data = Uri.parse("package:${context.packageName}")
+                                                }
+                                                manageAllFilesSettingsLauncher.launch(intent)
+                                            } catch (e: Exception) {
+                                                val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                                                manageAllFilesSettingsLauncher.launch(intent)
+                                            }
+                                        } else {
+                                            requestMultiplePermissionsLauncher.launch(
+                                                arrayOf(
+                                                    android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                                                    android.Manifest.permission.READ_EXTERNAL_STORAGE
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            )
+
+                            // 3. Contacts Permission Row
+                            PermissionRowItem(
+                                title = "Contacts Access",
+                                description = "Secure contacts sync valata laba denna.",
+                                icon = Icons.Filled.Person,
+                                granted = contactsGranted,
+                                onClick = {
+                                    if (!contactsGranted) {
+                                        requestMultiplePermissionsLauncher.launch(arrayOf(android.Manifest.permission.READ_CONTACTS))
+                                    }
+                                }
+                            )
+                        }
+                    }
+
+                    // Bottom Action button
+                    val permissionBtnInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                    Button(
+                        onClick = {
+                            if (allGranted) {
+                                onProceedPermissions()
+                            } else {
+                                // Trigger standard requests
+                                val listToRequest = mutableListOf<String>()
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notificationGranted) {
+                                    listToRequest.add(android.Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                                if (!contactsGranted) {
+                                    listToRequest.add(android.Manifest.permission.READ_CONTACTS)
+                                }
+                                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && !storageGranted) {
+                                    listToRequest.add(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                                    listToRequest.add(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+                                }
+
+                                if (listToRequest.isNotEmpty()) {
+                                    requestMultiplePermissionsLauncher.launch(listToRequest.toTypedArray())
+                                }
+
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !storageGranted) {
+                                    try {
+                                        val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                                            data = Uri.parse("package:${context.packageName}")
+                                        }
+                                        manageAllFilesSettingsLauncher.launch(intent)
+                                    } catch (e: Exception) {
+                                        val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                                        manageAllFilesSettingsLauncher.launch(intent)
+                                    }
+                                }
+                            }
+                        },
+                        interactionSource = permissionBtnInteractionSource,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(54.dp)
+                            .pressScale(permissionBtnInteractionSource)
+                            .testTag("permissions_action_button"),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (allGranted) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary,
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = if (allGranted) Icons.Filled.Check else Icons.Filled.Lock,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = if (allGranted) "PROCEED PROTOCOL" else "GRANT REQUIRED PERMISSIONS",
+                                style = MaterialTheme.typography.labelLarge.copy(
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 1.sp
+                                )
+                            )
+                        }
                     }
                 }
             }
@@ -317,27 +594,7 @@ fun PinLockScreen(
 
                 // Middle section errors display
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f).padding(vertical = 12.dp)) {
-                    AnimatedVisibility(
-                        visible = errorMessage != null,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically()
-                    ) {
-                        if (errorMessage != null) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.errorContainer,
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.padding(top = 8.dp, bottom = 12.dp)
-                            ) {
-                                Text(
-                                    text = errorMessage,
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
-                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        }
-                    }
+                    ErrorMessageBox(errorMessage = errorMessage)
 
                     // --- DRAW GRAPHIC SYSTEMS DYNAMICALLY ---
                     if (isBiometrics) {
@@ -654,13 +911,13 @@ fun PatternLockDrawGrid(
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(if (selected) 24.dp else 14.dp)
+                                        .size(if (selected) 14.dp else 8.dp)
                                         .background(
                                             color = if (selected) primaryColor else outlineColor,
                                             shape = CircleShape
                                         )
                                         .border(
-                                            width = if (selected) 4.dp else 0.dp,
+                                            width = if (selected) 2.5.dp else 0.dp,
                                             color = if (selected) primaryColor.copy(alpha = 0.3f) else Color.Transparent,
                                             shape = CircleShape
                                         )
@@ -891,5 +1148,90 @@ private fun Modifier.pressScale(interactionSource: androidx.compose.foundation.i
     return this.graphicsLayer {
         scaleX = scale
         scaleY = scale
+    }
+}
+
+@Composable
+fun PermissionRowItem(
+    title: String,
+    description: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    granted: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        border = BorderStroke(
+            1.dp,
+            if (granted) Color(0xFF4CAF50).copy(alpha = 0.4f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (granted) Color(0xFF4CAF50).copy(alpha = 0.15f)
+                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (granted) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Animated status indicator
+            val indicatorColor by animateColorAsState(
+                targetValue = if (granted) Color(0xFF4CAF50) else Color(0xFFE57373),
+                label = "indicatorColor"
+            )
+            
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(indicatorColor.copy(alpha = 0.12f))
+                    .border(1.dp, indicatorColor.copy(alpha = 0.5f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (granted) Icons.Filled.Check else Icons.Filled.Close,
+                    contentDescription = if (granted) "Granted" else "Not Granted",
+                    tint = indicatorColor,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
     }
 }
